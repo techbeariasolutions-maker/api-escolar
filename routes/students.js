@@ -1,252 +1,243 @@
 const express = require('express');
 const router = express.Router();
 const { authMiddleware } = require('../middleware/auth');
-
-// NOTA: En producción, estos datos vendrían de tu base de datos
-// Este es solo un ejemplo con datos en memoria
-let students = [
-  {
-    id: 1,
-    nombre: 'Juan Pérez',
-    email: 'juan.perez@email.com',
-    telefono: '555-0101',
-    fechaNacimiento: '2005-03-15',
-    direccion: 'Calle Principal 123',
-    activo: true,
-    fechaRegistro: '2024-01-15'
-  },
-  {
-    id: 2,
-    nombre: 'María García',
-    email: 'maria.garcia@email.com',
-    telefono: '555-0102',
-    fechaNacimiento: '2004-07-22',
-    direccion: 'Avenida Central 456',
-    activo: true,
-    fechaRegistro: '2024-01-16'
-  }
-];
+const { Student } = require('../db');
 
 // GET /api/students - Obtener todos los estudiantes
-router.get('/', authMiddleware, (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
-    // Filtros opcionales desde query params
     const { activo, search } = req.query;
-    
-    let filteredStudents = [...students];
-    
+
+    const where = {};
+
     // Filtrar por estado activo
     if (activo !== undefined) {
-      const isActive = activo === 'true';
-      filteredStudents = filteredStudents.filter(s => s.activo === isActive);
+      where.activo = activo === 'true';
     }
-    
-    // Buscar por nombre o email
+
+    let students = await Student.findAll({ where });
+
+    // Buscar por nombre o email (filtro en memoria después de obtener)
     if (search) {
       const searchLower = search.toLowerCase();
-      filteredStudents = filteredStudents.filter(s => 
+      students = students.filter(s =>
         s.nombre.toLowerCase().includes(searchLower) ||
-        s.email.toLowerCase().includes(searchLower)
+        s.email.toLowerCase().includes(searchLower) ||
+        (s.matricula && s.matricula.toLowerCase().includes(searchLower))
       );
     }
-    
+
     res.json({
       success: true,
-      count: filteredStudents.length,
-      data: filteredStudents
+      count: students.length,
+      data: students
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Error al obtener estudiantes',
-      error: error.message 
+      error: error.message
     });
   }
 });
 
 // GET /api/students/:id - Obtener un estudiante específico
-router.get('/:id', authMiddleware, (req, res) => {
+router.get('/:id', authMiddleware, async (req, res) => {
   try {
-    const studentId = parseInt(req.params.id);
-    const student = students.find(s => s.id === studentId);
-    
+    const student = await Student.findByPk(req.params.id);
+
     if (!student) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Estudiante no encontrado' 
+      return res.status(404).json({
+        success: false,
+        message: 'Estudiante no encontrado'
       });
     }
-    
+
     res.json({
       success: true,
       data: student
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Error al obtener estudiante',
-      error: error.message 
+      error: error.message
     });
   }
 });
 
 // POST /api/students - Crear nuevo estudiante
-router.post('/', authMiddleware, (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { nombre, email, telefono, fechaNacimiento, direccion } = req.body;
-    
+    const { nombre, email, telefono, direccion, edad, matricula, estado } = req.body;
+
     // Validaciones básicas
     if (!nombre || !email) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Nombre y email son requeridos' 
+      return res.status(400).json({
+        success: false,
+        message: 'Nombre y email son requeridos'
       });
     }
-    
+
     // Verificar email duplicado
-    const emailExists = students.some(s => s.email === email);
+    const emailExists = await Student.findOne({ where: { email } });
     if (emailExists) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'El email ya está registrado' 
+      return res.status(400).json({
+        success: false,
+        message: 'El email ya está registrado'
       });
     }
-    
-    // Crear nuevo estudiante
-    const newStudent = {
-      id: students.length > 0 ? Math.max(...students.map(s => s.id)) + 1 : 1,
+
+    // Verificar matrícula duplicada (si se envía)
+    if (matricula) {
+      const matriculaExists = await Student.findOne({ where: { matricula } });
+      if (matriculaExists) {
+        return res.status(400).json({
+          success: false,
+          message: 'La matrícula ya existe'
+        });
+      }
+    }
+
+    const newStudent = await Student.create({
       nombre,
       email,
       telefono: telefono || '',
-      fechaNacimiento: fechaNacimiento || '',
       direccion: direccion || '',
-      activo: true,
-      fechaRegistro: new Date().toISOString().split('T')[0]
-    };
-    
-    students.push(newStudent);
-    
+      edad: edad || null,
+      matricula: matricula || null,
+      estado: estado || 'activo',
+      activo: true
+    });
+
     res.status(201).json({
       success: true,
       message: 'Estudiante creado exitosamente',
       data: newStudent
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Error al crear estudiante',
-      error: error.message 
+      error: error.message
     });
   }
 });
 
 // PUT /api/students/:id - Actualizar estudiante
-router.put('/:id', authMiddleware, (req, res) => {
+router.put('/:id', authMiddleware, async (req, res) => {
   try {
-    const studentId = parseInt(req.params.id);
-    const studentIndex = students.findIndex(s => s.id === studentId);
-    
-    if (studentIndex === -1) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Estudiante no encontrado' 
+    const student = await Student.findByPk(req.params.id);
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Estudiante no encontrado'
       });
     }
-    
-    const { nombre, email, telefono, fechaNacimiento, direccion, activo } = req.body;
-    
+
+    const { nombre, email, telefono, direccion, edad, matricula, estado, activo } = req.body;
+
     // Verificar email duplicado (excepto el propio)
-    if (email && email !== students[studentIndex].email) {
-      const emailExists = students.some(s => s.email === email && s.id !== studentId);
+    if (email && email !== student.email) {
+      const emailExists = await Student.findOne({ where: { email } });
       if (emailExists) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'El email ya está registrado' 
+        return res.status(400).json({
+          success: false,
+          message: 'El email ya está registrado'
         });
       }
     }
-    
-    // Actualizar campos
-    students[studentIndex] = {
-      ...students[studentIndex],
-      nombre: nombre || students[studentIndex].nombre,
-      email: email || students[studentIndex].email,
-      telefono: telefono !== undefined ? telefono : students[studentIndex].telefono,
-      fechaNacimiento: fechaNacimiento !== undefined ? fechaNacimiento : students[studentIndex].fechaNacimiento,
-      direccion: direccion !== undefined ? direccion : students[studentIndex].direccion,
-      activo: activo !== undefined ? activo : students[studentIndex].activo
-    };
-    
+
+    // Verificar matrícula duplicada (excepto la propia)
+    if (matricula && matricula !== student.matricula) {
+      const matriculaExists = await Student.findOne({ where: { matricula } });
+      if (matriculaExists) {
+        return res.status(400).json({
+          success: false,
+          message: 'La matrícula ya existe'
+        });
+      }
+    }
+
+    await student.update({
+      nombre: nombre !== undefined ? nombre : student.nombre,
+      email: email !== undefined ? email : student.email,
+      telefono: telefono !== undefined ? telefono : student.telefono,
+      direccion: direccion !== undefined ? direccion : student.direccion,
+      edad: edad !== undefined ? edad : student.edad,
+      matricula: matricula !== undefined ? matricula : student.matricula,
+      estado: estado !== undefined ? estado : student.estado,
+      activo: activo !== undefined ? activo : student.activo
+    });
+
     res.json({
       success: true,
       message: 'Estudiante actualizado exitosamente',
-      data: students[studentIndex]
+      data: student
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Error al actualizar estudiante',
-      error: error.message 
+      error: error.message
     });
   }
 });
 
 // DELETE /api/students/:id - Eliminar estudiante (soft delete)
-router.delete('/:id', authMiddleware, (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    const studentId = parseInt(req.params.id);
-    const studentIndex = students.findIndex(s => s.id === studentId);
-    
-    if (studentIndex === -1) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Estudiante no encontrado' 
+    const student = await Student.findByPk(req.params.id);
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Estudiante no encontrado'
       });
     }
-    
+
     // Soft delete - marcar como inactivo
-    students[studentIndex].activo = false;
-    
+    await student.update({ activo: false });
+
     res.json({
       success: true,
       message: 'Estudiante desactivado exitosamente',
-      data: students[studentIndex]
+      data: student
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Error al eliminar estudiante',
-      error: error.message 
+      error: error.message
     });
   }
 });
 
 // DELETE /api/students/:id/permanent - Eliminar permanentemente
-router.delete('/:id/permanent', authMiddleware, (req, res) => {
+router.delete('/:id/permanent', authMiddleware, async (req, res) => {
   try {
-    const studentId = parseInt(req.params.id);
-    const studentIndex = students.findIndex(s => s.id === studentId);
-    
-    if (studentIndex === -1) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Estudiante no encontrado' 
+    const student = await Student.findByPk(req.params.id);
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Estudiante no encontrado'
       });
     }
-    
-    // Eliminar permanentemente
-    const deletedStudent = students.splice(studentIndex, 1)[0];
-    
+
+    await student.destroy();
+
     res.json({
       success: true,
       message: 'Estudiante eliminado permanentemente',
-      data: deletedStudent
+      data: { id: req.params.id }
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Error al eliminar estudiante',
-      error: error.message 
+      error: error.message
     });
   }
 });
