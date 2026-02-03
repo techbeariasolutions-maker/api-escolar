@@ -52,14 +52,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 3001;
-
-app.listen(PORT, () => {
-  console.log(`=================================`);
-  console.log(`🚀 Servidor API corriendo en puerto ${PORT}`);
-  console.log(`📡 URL: http://localhost:${PORT}`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`=================================`);
+const port = process.env.PORT || 3001;  // Railway inyecta PORT automáticamente
+app.listen(port, () => {
+  console.log(`Servidor API corriendo en puerto ${port}`);
+  // Opcional: no imprimas localhost en producción
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`URL: http://localhost:${port}`);
+  }
+  console.log(`Health check disponible en /api/health`);
 });
 
 module.exports = app;
