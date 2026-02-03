@@ -19,28 +19,34 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rutas de la API
-app.use('/api/auth',        require('./routes/auth'));
-app.use('/api/students',    require('./routes/students'));
-app.use('/api/groups',      require('./routes/groups'));
-app.use('/api/enrollments', require('./routes/enrollments'));
-app.use('/api/users',       require('./routes/users'));
-
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    message: 'API del Sistema Escolar funcionando correctamente',
+  res.json({ 
+    status: 'ok', 
+    message: 'API escolar funcionando correctamente',
     timestamp: new Date().toISOString()
   });
 });
 
-// 404
+// Rutas
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/students', require('./routes/students'));
+app.use('/api/groups', require('./routes/groups'));
+app.use('/api/enrollments', require('./routes/enrollments'));
+app.use('/api/users', require('./routes/users'));
+
+// ⚠️ RUTA DE RESET - Solo para desarrollo
+app.use('/api/database', require('./routes/reset'));
+
+// Ruta 404
 app.use((req, res) => {
-  res.status(404).json({ success: false, message: 'Ruta no encontrada' });
+  res.status(404).json({
+    success: false,
+    message: 'Endpoint no encontrado'
+  });
 });
 
-// Error global
+// Error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(500).json({
@@ -50,23 +56,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ── Arranque ──────────────────────────────────────────────────────────────
-const port = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
-// Primero conectamos a la BD y sincronizamos tablas; solo entonces escuchamos.
+// Inicializar base de datos y luego arrancar servidor
 initDB()
   .then(() => {
-    app.listen(port, () => {
-      console.log(`Servidor API corriendo en puerto ${port}`);
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`URL local: http://localhost:${port}`);
-      }
-      console.log('Health check disponible en /api/health');
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
     });
   })
-  .catch((err) => {
-    console.error('[DB] Error al conectar con la base de datos:', err);
-    process.exit(1);   // Railway reinicia el container automáticamente
+  .catch((error) => {
+    console.error('❌ No se pudo inicializar la base de datos:', error);
+    process.exit(1);
   });
-
-module.exports = app;
