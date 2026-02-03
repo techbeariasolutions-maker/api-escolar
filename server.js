@@ -52,13 +52,17 @@ app.use((err, req, res, next) => {
   });
 });
 
-const port = process.env.PORT || 3001;  // Railway inyecta PORT automáticamente
+// Versión corregida para Railway (puerto dinámico)
+const port = process.env.PORT || 3001;  // Railway asigna PORT automáticamente
+
 app.listen(port, () => {
   console.log(`Servidor API corriendo en puerto ${port}`);
-  // Opcional: no imprimas localhost en producción
+
+  // Solo muestra localhost en desarrollo (local), no en producción
   if (process.env.NODE_ENV !== 'production') {
-    console.log(`URL: http://localhost:${port}`);
+    console.log(`URL local: http://localhost:${port}`);
   }
+
   console.log(`Health check disponible en /api/health`);
 });
 
