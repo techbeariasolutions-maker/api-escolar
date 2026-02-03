@@ -478,8 +478,9 @@ async function initDB() {
     await sequelize.authenticate();
     console.log('✅ Conexión a PostgreSQL establecida correctamente');
 
-    await sequelize.sync({ alter: false });
-    console.log('✅ Modelos sincronizados con la base de datos');
+    // alter: true para que agregue columnas nuevas (matricula, estado, codigo, etc.)
+    await sequelize.sync({ alter: true });
+    console.log('✅ Modelos sincronizados con la base de datos (alter: true)');
 
     await seedData();
 
