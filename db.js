@@ -434,23 +434,24 @@ async function seedData() {
   }
 }
 
-// Función para BORRAR TODOS los datos (usar con precaución)
+// ✅ Función corregida: usa TRUNCATE CASCADE para respetar foreign keys
 async function clearAllData() {
   try {
     console.log('🗑️  Borrando todos los datos...');
-    
-    await Enrollment.destroy({ where: {}, truncate: true });
+
+    // Usar query raw con CASCADE para evitar el error de foreign key
+    await sequelize.query('TRUNCATE TABLE enrollments CASCADE');
     console.log('✅ Inscripciones borradas');
-    
-    await Student.destroy({ where: {}, truncate: true });
+
+    await sequelize.query('TRUNCATE TABLE students CASCADE');
     console.log('✅ Estudiantes borrados');
-    
-    await Group.destroy({ where: {}, truncate: true });
+
+    await sequelize.query('TRUNCATE TABLE groups CASCADE');
     console.log('✅ Grupos borrados');
-    
-    await User.destroy({ where: {}, truncate: true });
+
+    await sequelize.query('TRUNCATE TABLE users CASCADE');
     console.log('✅ Usuarios borrados');
-    
+
     console.log('🎯 Base de datos limpia');
   } catch (error) {
     console.error('❌ Error al borrar datos:', error);
